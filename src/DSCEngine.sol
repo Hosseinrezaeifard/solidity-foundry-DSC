@@ -46,9 +46,38 @@ pragma solidity ^0.8.20;
  */
 
 contract DSCEngine {
+    /* ============================ Errors ============================ */
+    error DSCEngine__MustBeMoreThanZero();
+    error DSCEngine__NotAllowedToken();
+
+    /* ============================ State Variables ============================ */
+    mapping(address token => address priceFeed) private s_priceFeeds;
+
+    /* ============================ Modifiers ============================ */
+    modifier moreThanZero(uint256 _amount) {
+        if (_amount <= 0) revert DSCEngine__MustBeMoreThanZero();
+        _;
+    }
+
+    modifier isAllowedToken(address token) {
+        if (token == address(0)) revert DSCEngine__NotAllowedToken();
+        _;
+    }
+
+    /* ============================ Functions ============================ */
+    constructor() {}
+
+    /* ============================ External Functions ============================ */
     function depositCollateralAndMintDSC() external {}
 
-    function depositCollateral() external {}
+    /*
+     * @param tokenCollateralAddress: The ERC20 token address of the collateral you're depositing
+     * @param amountCollateral: The amount of collateral you're depositing
+     */
+    function depositCollateral(
+        address tokenCollateralAddress,
+        uint256 amountCollateral
+    ) external moreThanZero(amountCollateral) {}
 
     function redeemCollateral() external {}
 
