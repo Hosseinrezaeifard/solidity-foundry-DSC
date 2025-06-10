@@ -44,8 +44,12 @@ contract DecentralizedStableCoin is ERC20Burnable, Ownable {
     error DecentralizedStableCoin__BurnAmountExceedsBalance();
     error DecentralizedStableCoin__NotZeroAddress();
 
+    // we're gonna use the Ownable contract to make the owner the deployer of the contract
     constructor() ERC20("DecentralizedStableCoin", "DSC") Ownable(msg.sender) {}
 
+    // this burn function is gonna burn tokens from the caller's balance
+    // only the owner can burn the tokens
+    // so we're using the onlyOwner modifier to achieve this
     function burn(uint256 _amount) public override onlyOwner {
         uint256 balance = balanceOf(msg.sender);
         if (_amount <= 0) {
@@ -54,9 +58,15 @@ contract DecentralizedStableCoin is ERC20Burnable, Ownable {
         if (_amount > balance) {
             revert DecentralizedStableCoin__BurnAmountExceedsBalance();
         }
+        // we're gonna still call the burn function from the ERC20Burnable contract
+        // but we're gonna add some extra logic to it
+        // so we're gonna use the super keyword to still run the original burn's logic
         super.burn(_amount);
     }
 
+    // this mint function is gonna mint (create) tokens to the caller
+    // only the owner can mint the tokens
+    // so we're using the onlyOwner modifier to achieve this
     function mint(
         address _to,
         uint256 _amount
