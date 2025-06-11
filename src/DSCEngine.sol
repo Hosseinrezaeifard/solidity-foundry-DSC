@@ -82,6 +82,12 @@ contract DSCEngine is ReentrancyGuard {
         uint256 indexed amount
     );
 
+    event CollateralRedeemed(
+        address indexed user,
+        address indexed token,
+        uint256 indexed amount
+    );
+
     /* ============================ Modifiers ============================ */
     modifier moreThanZero(uint256 _amount) {
         if (_amount <= 0) revert DSCEngine__MustBeMoreThanZero();
@@ -89,6 +95,7 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     modifier isAllowedToken(address token) {
+        // if there is no price feed address corresponded to that token, then it's not allowed
         if (s_priceFeeds[token] == address(0)) {
             revert DSCEngine__NotAllowedToken();
         }
@@ -114,32 +121,60 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     /* ============================ External Functions ============================ */
-    function depositCollateralAndMintDSC() external {}
+    /*
+     * @param tokenCollateralAddress: The ERC20 token address of the collateral you're depositing
+     * @param amountCollateral: The amount of collateral you're depositing
+     * @param amountDscToMint: The amount of DSC you want to mint
+     * @notice This function will deposit your collateral and mint DSC in one transaction
+     */
+    function depositCollateralAndMintDSC(
+        address tokenCollateralAddress,
+        uint256 amountCollateral,
+        uint256 amountDscToMint
+    ) external {
+        // if mintDSC fails, it will revert the transaction including the depositCollateral
+        // so the user's collateral will not be deposited
+        // atomic transactions are one of the beauties of solidity :)
+        depositCollateral(tokenCollateralAddress, amountCollateral);
+        mintDSC(amountDscToMint);
+    }
+
     /*
      * @notice Follows CEI pattern
      * @param tokenCollateralAddress: The ERC20 token address of the collateral you're depositing
      * @param amountCollateral: The amount of collateral you're depositing
+     * this function is gonna be used to deposit collateral by a user
      */
-
     function depositCollateral(
         address tokenCollateralAddress,
         uint256 amountCollateral
     )
-        external
+        public
         moreThanZero(amountCollateral)
         isAllowedToken(tokenCollateralAddress)
         nonReentrant
     {
+        // we're gonna add the amount of collateral to the msg.sender address's balance
+        // the strucutre is a nested mapping
+        // mapping(address user => mapping(address token => uint256 amount))
+        // it's like this:
+        //      [msg.sender][wethAddress][amount] == something;
+        //      [msg.sender][wbtcAddress][amount] == something;
+
         s_collateralDeposited[msg.sender][
             tokenCollateralAddress
         ] += amountCollateral;
 
+        // emit an event to let client know that the collateral has been deposited
         emit CollateralDeposited(
             msg.sender,
             tokenCollateralAddress,
             amountCollateral
         );
 
+        // send the token to the contract
+        // we don't need to check health factor here because we're not minting DSC
+        // transferFrom is a function that allows us to transfer tokens from one address to another
         bool success = IERC20(tokenCollateralAddress).transferFrom(
             msg.sender,
             address(this),
@@ -148,9 +183,46 @@ contract DSCEngine is ReentrancyGuard {
         if (!success) revert DSCEngine__TransferFailed();
     }
 
-    function redeemCollateral() external {}
+    // in order to redeem collateral
+    // 1. health factor must be above 1 AFTER collateral is pulled
+    function redeemCollateral(
+        address tokenCollateralAddress,
+        uint256 amountCollateral
+    ) public moreThanZero(amountCollateral) nonReentrant {
+        // do our inside accounting
+        s_collateralDeposited[msg.sender][
+            tokenCollateralAddress
+        ] -= amountCollateral;
 
-    function redeemCollateralForDSC() external {}
+        // emit an event to let client know that the collateral has been redeemed
+        emit CollateralRedeemed(
+            msg.sender,
+            tokenCollateralAddress,
+            amountCollateral
+        );
+
+        bool success = IERC20(tokenCollateralAddress).transfer(
+            msg.sender,
+            amountCollateral
+        );
+        if (!success) revert DSCEngine__TransferFailed();
+        _revertIfHealthFactorIsBroken(msg.sender);
+    }
+
+    /*
+     * @param tokenCollateralAddress: The ERC20 token address of the collateral you're withdrawing
+     * @param amountCollateral: The amount of collateral you're withdrawing
+     * @param amountDscToBurn: The amount of DSC you want to burn
+     * @notice This function will withdraw your collateral and burn DSC in one transaction
+     */
+    function redeemCollateralForDSC(
+        address tokenCollateralAddress,
+        uint256 amountCollateral,
+        uint256 amountDscToBurn
+    ) external {
+        burnDSC(amountDscToBurn);
+        redeemCollateral(tokenCollateralAddress, amountCollateral);
+    }
 
     /* @notice Follows CEI pattern
      * @param amountDscToMint: The amount of DSC to mint
@@ -158,14 +230,21 @@ contract DSCEngine is ReentrancyGuard {
      */
     function mintDSC(
         uint256 amountDscToMint
-    ) external moreThanZero(amountDscToMint) nonReentrant {
+    ) public moreThanZero(amountDscToMint) nonReentrant {
         s_DSCMinted[msg.sender] += amountDscToMint;
         _revertIfHealthFactorIsBroken(msg.sender);
         bool minted = i_dsc.mint(msg.sender, amountDscToMint);
         if (!minted) revert DSCEngine__MintFailed();
     }
 
-    function burnDSC() external {}
+    function burnDSC(uint256 _amount) external moreThanZero(_amount) {
+        s_DSCMinted[msg.sender] -= _amount;
+        bool success = i_dsc.transferFrom(msg.sender, address(this), _amount);
+        if (!success) {
+            revert DSCEngine__TransferFailed();
+        }
+        i_dsc.burn(amount);
+    }
 
     function liquidate() external {}
 
