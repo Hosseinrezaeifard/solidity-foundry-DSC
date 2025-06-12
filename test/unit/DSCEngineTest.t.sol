@@ -27,6 +27,14 @@ contract DSCEngineTest is Test {
     address[] public tokenAddresses;
     address[] public priceFeedAddresses;
 
+    modifier depositedCollateral() {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(dscEngine), AMOUNT_COLLATERAL);
+        dscEngine.depositCollateral(weth, AMOUNT_COLLATERAL);
+        vm.stopPrank();
+        _;
+    }
+
     function setUp() public {
         deployer = new DeployDSC();
         (dsc, dscEngine, config) = deployer.run();
@@ -80,5 +88,25 @@ contract DSCEngineTest is Test {
         vm.expectRevert(DSCEngine.DSCEngine__NotAllowedToken.selector);
         dscEngine.depositCollateral(address(tt), AMOUNT_COLLATERAL);
         vm.stopPrank();
+    }
+
+    function testCanDepositCollateralAndGetAccountInfo()
+        public
+        depositedCollateral
+    {
+        (uint256 totalDscMinted, uint256 collateralValueInUsd) = dscEngine
+            .getAccountInformation(USER);
+        uint256 expectedTotalDscMinted = 0;
+        uint256 expectedCollateralAmount = dscEngine.getTokenAmountFromUsd(
+            weth,
+            collateralValueInUsd
+        );
+        uint256 expectedCollateralValueInUsd = dscEngine.getUsdValue(
+            weth,
+            AMOUNT_COLLATERAL
+        );
+        assertEq(expectedTotalDscMinted, totalDscMinted);
+        assertEq(expectedCollateralAmount, AMOUNT_COLLATERAL);
+        assertEq(expectedCollateralValueInUsd, collateralValueInUsd);
     }
 }
