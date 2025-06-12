@@ -67,7 +67,7 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant LIQUIDATION_THRESHOLD = 50; // 200% overcollateralized
     uint256 private constant LIQUIDATION_PRECISION = 100;
     uint256 private constant MIN_HEALTH_FACTOR = 1e18;
-    uint256 private constant LIQUIDATOR_BONUS = 110;
+    uint256 private constant LIQUIDATION_BONUS = 110;
 
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount))
@@ -284,7 +284,7 @@ contract DSCEngine is ReentrancyGuard {
         // We should implement a feature to liquidate in the event the protocol is insolvent
         // and sweep extra amounts into a treasury
         uint256 bonusCollateral = (collateralAmountFromDebtCovered *
-            LIQUIDATOR_BONUS) / LIQUIDATION_PRECISION;
+            LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
         uint256 totalCollateralToRedeem = collateralAmountFromDebtCovered +
             bonusCollateral;
         _redeemCollateral(
