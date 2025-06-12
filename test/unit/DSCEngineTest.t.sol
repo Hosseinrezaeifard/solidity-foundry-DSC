@@ -24,6 +24,9 @@ contract DSCEngineTest is Test {
     uint256 public constant AMOUNT_COLLATERAL = 10 ether;
     uint256 public constant USER_STARTING_BALANCE = 10 ether;
 
+    address[] public tokenAddresses;
+    address[] public priceFeedAddresses;
+
     function setUp() public {
         deployer = new DeployDSC();
         (dsc, dscEngine, config) = deployer.run();
@@ -31,6 +34,19 @@ contract DSCEngineTest is Test {
             .activeNetworkConfig();
         // we're just giving user 10 ether of weth
         ERC20Mock(weth).mint(USER, USER_STARTING_BALANCE);
+    }
+
+    /* ============================ Constructor Tests ============================ */
+    function testRevertsIfTokenLengthDoesntMatchPriceFeeds() public {
+        tokenAddresses.push(weth);
+        priceFeedAddresses.push(ethUsdPriceFeed);
+        priceFeedAddresses.push(btcUsdPriceFeed);
+        vm.expectRevert(
+            DSCEngine
+                .DSCEngine__TokenAddressesAndPriceFeedAddressesLengthsMustBeTheSame
+                .selector
+        );
+        new DSCEngine(tokenAddresses, priceFeedAddresses, address(dsc));
     }
 
     /* ============================ Price Tests ============================ */
@@ -44,7 +60,7 @@ contract DSCEngineTest is Test {
 
     /* ============================ depositCollateral Tests ============================ */
     function testRevertIfCollateralZero() public {
-        vm.startPrank(USER);
+        vm.startcPrank(USER);
         ERC20Mock(weth).approve(address(dscEngine), AMOUNT_COLLATERAL);
         vm.expectRevert(DSCEngine.DSCEngine__MustBeMoreThanZero.selector);
         dscEngine.depositCollateral(weth, 0);
