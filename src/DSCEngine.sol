@@ -382,25 +382,10 @@ contract DSCEngine is ReentrancyGuard {
         i_dsc.burn(amountDscToBurn);
     }
 
-    /* ============================ Public & External View & Pure Functions ============================ */
-
-    function getAccountCollateralValue(
-        address user
-    ) public view returns (uint256) {
-        // loop through each collateral token, get the amount they have deposited, and map to price to get USD value
-        uint256 totalCollateralValueInUsd = 0;
-        for (uint256 i = 0; i < s_collateralTokens.length; i++) {
-            address token = s_collateralTokens[i];
-            uint256 amount = s_collateralDeposited[user][token];
-            totalCollateralValueInUsd += getUsdValue(token, amount);
-        }
-        return totalCollateralValueInUsd;
-    }
-
-    function getUsdValue(
+    function _getUsdValue(
         address token,
         uint256 amount
-    ) public view returns (uint256) {
+    ) private view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(
             s_priceFeeds[token]
         );
@@ -410,8 +395,59 @@ contract DSCEngine is ReentrancyGuard {
         // usdValueOfCollateral = ethValueInUsd (WITH 8 DECIMALS) * amount (IN WEI) = (1000 * 1e8) * 1000 * 1e18
         // usdValueOfCollateral = ethValueInUsd * amount = ((1000 * 1e8 * 1e10) * 1000 * 1e18) / 1e18
         // usdValueOfCollateral = ethValueInUsd * amount = ((1000 * 1e8 * ADDITIONAL_FEED_PRECISION) * 1000 * 1e18) / 1e18
+
+        // 1 ETH = 1000 USD
+        // The returned value from Chainlink will be 1000 * 1e8
+        // Most USD pairs have 8 decimals, so we will just pretend they all do
+        // We want to have everything in terms of WEI, so we add 10 zeros at the end
         return
-            ((uint256(price) * ADDITIONAL_FEED_PRECISION * amount)) / PRECISION;
+            ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
+    }
+
+    function _calculateHealthFactor(
+        uint256 totalDscMinted,
+        uint256 collateralValueInUsd
+    ) internal pure returns (uint256) {
+        if (totalDscMinted == 0) return type(uint256).max;
+        uint256 collateralAdjustedForThreshold = (collateralValueInUsd *
+            LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+        return (collateralAdjustedForThreshold * PRECISION) / totalDscMinted;
+    }
+
+    function revertIfHealthFactorIsBroken(address user) internal view {
+        uint256 userHealthFactor = _healthFactor(user);
+        if (userHealthFactor < MIN_HEALTH_FACTOR) {
+            revert DSCEngine__BreaksHealthFactor(userHealthFactor);
+        }
+    }
+
+    /* ============================ Public & External View & Pure Functions ============================ */
+
+    function calculateHealthFactor(
+        uint256 totalDscMinted,
+        uint256 collateralValueInUsd
+    ) external pure returns (uint256) {
+        return _calculateHealthFactor(totalDscMinted, collateralValueInUsd);
+    }
+
+    function getUsdValue(
+        address token,
+        uint256 amount // in WEI
+    ) external view returns (uint256) {
+        return _getUsdValue(token, amount);
+    }
+
+    function getAccountCollateralValue(
+        address user
+    ) public view returns (uint256) {
+        // loop through each collateral token, get the amount they have deposited, and map to price to get USD value
+        uint256 totalCollateralValueInUsd = 0;
+        for (uint256 i = 0; i < s_collateralTokens.length; i++) {
+            address token = s_collateralTokens[i];
+            uint256 amount = s_collateralDeposited[user][token];
+            totalCollateralValueInUsd += _getUsdValue(token, amount);
+        }
+        return totalCollateralValueInUsd;
     }
 
     function getTokenAmountFromUsd(
@@ -479,10 +515,10 @@ contract DSCEngine is ReentrancyGuard {
         (totalDscMinted, collateralValueInUsd) = _getAccountInformation(user);
     }
 
-    function getCollateralDeposited(
+    function getCollateralBalanceOfUser(
         address user,
-        address collateral
-    ) external view isAllowedToken(collateral) returns (uint256) {
-        return s_collateralDeposited[user][collateral];
+        address token
+    ) external view returns (uint256) {
+        return s_collateralDeposited[user][token];
     }
 }

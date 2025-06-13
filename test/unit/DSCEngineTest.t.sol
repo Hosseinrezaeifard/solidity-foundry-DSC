@@ -115,7 +115,10 @@ contract DSCEngineTest is Test {
             weth,
             AMOUNT_COLLATERAL
         );
-        uint256 amountDeposited = dscEngine.getCollateralDeposited(USER, weth);
+        uint256 amountDeposited = dscEngine.getCollateralBalanceOfUser(
+            USER,
+            weth
+        );
         assertEq(amountDeposited, AMOUNT_COLLATERAL);
         assertEq(expectedTotalDscMinted, totalDscMinted);
         assertEq(expectedCollateralAmount, AMOUNT_COLLATERAL);
