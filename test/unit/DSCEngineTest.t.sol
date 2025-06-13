@@ -3,6 +3,7 @@
 pragma solidity ^0.8.20;
 
 import {Test, console} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {DSCEngine} from "../../src/DSCEngine.sol";
 import {DecentralizedStableCoin} from "../../src/DecentralizedStableCoin.sol";
 import {DeployDSC} from "../../script/DeployDSC.s.sol";
@@ -27,6 +28,13 @@ contract DSCEngineTest is Test {
     address[] public tokenAddresses;
     address[] public priceFeedAddresses;
 
+    // Events
+    event CollateralDeposited(
+        address indexed user,
+        address indexed token,
+        uint256 indexed amount
+    );
+
     modifier depositedCollateral() {
         vm.startPrank(USER);
         ERC20Mock(weth).approve(address(dscEngine), AMOUNT_COLLATERAL);
@@ -44,7 +52,7 @@ contract DSCEngineTest is Test {
         ERC20Mock(weth).mint(USER, USER_STARTING_BALANCE);
     }
 
-    /* ============================ Constructor Tests ============================ */
+    /* ============================ Start Constructor Tests ============================ */
     function testRevertsIfTokenLengthDoesntMatchPriceFeeds() public {
         tokenAddresses.push(weth);
         priceFeedAddresses.push(ethUsdPriceFeed);
@@ -56,8 +64,9 @@ contract DSCEngineTest is Test {
         );
         new DSCEngine(tokenAddresses, priceFeedAddresses, address(dsc));
     }
+    /* ============================ End Constructor Tests ============================ */
 
-    /* ============================ Price Tests ============================ */
+    /* ============================ Start Price Tests ============================ */
     function testGetUsdValue() public view {
         uint256 ethAmount = 15e18;
         // 15e18 * 2000/ETH = 30,000e18;
@@ -72,8 +81,9 @@ contract DSCEngineTest is Test {
         uint256 actualWeth = dscEngine.getTokenAmountFromUsd(weth, usdAmount);
         assertEq(actualWeth, expectedWeth);
     }
+    /* ============================ End Price Tests ============================ */
 
-    /* ============================ Deposit Collateral Tests ============================ */
+    /* ============================ Start Deposit Collateral Tests ============================ */
     function testRevertsIfCollateralZero() public {
         vm.startPrank(USER);
         ERC20Mock(weth).approve(address(dscEngine), AMOUNT_COLLATERAL);
@@ -105,8 +115,53 @@ contract DSCEngineTest is Test {
             weth,
             AMOUNT_COLLATERAL
         );
+        uint256 amountDeposited = dscEngine.getCollateralDeposited(USER, weth);
+        assertEq(amountDeposited, AMOUNT_COLLATERAL);
         assertEq(expectedTotalDscMinted, totalDscMinted);
         assertEq(expectedCollateralAmount, AMOUNT_COLLATERAL);
         assertEq(expectedCollateralValueInUsd, collateralValueInUsd);
     }
+
+    function testCanDepositCollateralAndEmitEventUsingRecordLogs() public {
+        vm.recordLogs();
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(dscEngine), AMOUNT_COLLATERAL);
+        dscEngine.depositCollateral(weth, AMOUNT_COLLATERAL);
+        vm.stopPrank();
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        // The event signature hash (topic[0])
+        bytes32 expectedEventSignature = keccak256(
+            "CollateralDeposited(address,address,uint256)"
+        );
+
+        // Find the CollateralDeposited event (it might not be the first log)
+        bool eventFound = false;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == expectedEventSignature) {
+                // Check the indexed parameters
+                assertEq(logs[i].topics[1], bytes32(uint256(uint160(USER)))); // user (indexed)
+                assertEq(logs[i].topics[2], bytes32(uint256(uint160(weth)))); // token (indexed)
+                assertEq(logs[i].topics[3], bytes32(AMOUNT_COLLATERAL)); // amount (indexed)
+                eventFound = true;
+                break;
+            }
+        }
+        assertTrue(eventFound, "CollateralDeposited event not found");
+    }
+
+    function testCanDepositCollateralAndEmitEventUsingExpectEmit() public {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(dscEngine), AMOUNT_COLLATERAL);
+
+        // 1. Set up expectation BEFORE the action
+        vm.expectEmit(true, true, true, false, address(dscEngine));
+        emit CollateralDeposited(USER, weth, AMOUNT_COLLATERAL);
+
+        // 2. Trigger the function that should emit the event
+        dscEngine.depositCollateral(weth, AMOUNT_COLLATERAL);
+        vm.stopPrank();
+    }
+    /* ============================ End Deposit Collateral Tests ============================ */
 }
