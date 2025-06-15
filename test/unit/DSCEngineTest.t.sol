@@ -167,4 +167,9 @@ contract DSCEngineTest is Test {
         vm.stopPrank();
     }
     /* ============================ End Deposit Collateral Tests ============================ */
+
+    /* ============================ Start Mint DSC Tests ============================ */
+    function testMintDscRevertsIfHealthFactorIsBroken() public {}
+    function testCanMintDsc() public {}
+    /* ============================ End Mint DSC Tests ============================ */
 }
