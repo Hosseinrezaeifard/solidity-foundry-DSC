@@ -6,4 +6,7 @@ remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@chainlink/contracts/=lib/chainlink-brownie-contracts/contracts/",
 ]
+runs = 128
+depth = 128
+fail_on_revert = false
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
