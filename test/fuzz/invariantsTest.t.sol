@@ -8,9 +8,18 @@
 
 pragma solidity ^0.8.20;
 
+import {DSCEngine} from "../../src/DSCEngine.sol";
+import {DeployDSC} from "../../script/DeployDSC.s.sol";
 import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol"
 
 contract InvariantsTest is StdInvariant, Test {
-    
+    DeployDSC deployer;
+    DSCEngine dsce;
+    function setUp() external {
+        deployer = new DeployDSC();
+        (dsc, dscEngine, config) = deployer.run();
+        (ethUsdPriceFeed, btcUsdPriceFeed, weth, wbtc, deployerKey) = config
+            .activeNetworkConfig();
+    }   
 }
