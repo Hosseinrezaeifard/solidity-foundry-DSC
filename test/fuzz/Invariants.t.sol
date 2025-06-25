@@ -9,18 +9,24 @@
 pragma solidity ^0.8.20;
 
 import {DSCEngine} from "../../src/DSCEngine.sol";
+import {DecentralizedStableCoin} from "../../src/DecentralizedStableCoin.sol";
 import {DeployDSC} from "../../script/DeployDSC.s.sol";
+import {HelperConfig} from "../../script/HelperConfig.s.sol";
+import {Handler} from "./Handler.t.sol"
 import {Test} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
-import {HelperConfig} from "../../script/HelperConfig.s.sol";
 
-contract InvariantsTest is StdInvariant, Test {
+contract Invariants is StdInvariant, Test {
     DeployDSC deployer;
+    DecentralizedStableCoin dsc;
     DSCEngine dsce;
     HelperConfig config;
+    Handler handler;
 
     function setUp() external {
         deployer = new DeployDSC();
-        (, dsce, config) = deployer.run();
+        (dsc, dsce, config) = deployer.run();
+        handler = new Handler(dsce, dsc);
+        targetContract(address(handler));
     }
 }
