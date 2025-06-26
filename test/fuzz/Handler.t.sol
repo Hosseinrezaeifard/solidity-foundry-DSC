@@ -9,6 +9,7 @@ import {DecentralizedStableCoin} from "../../src/DecentralizedStableCoin.sol";
 import {Test} from "forge-std/Test.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {console} from "forge-std/console.sol";
+import {MockV3Aggregator} from "../../lib/chainlink-brownie-contracts/tests/mocks/MockV3Aggregator.sol";
 
 contract Handler is Test {
     DSCEngine dsce;
@@ -19,6 +20,7 @@ contract Handler is Test {
 
     uint256 public timesMintIsCalled;
     address[] public usersWithCollateralDeposited;
+    MockV3Aggregator public wethUsdPriceFeed;
 
     uint256 private MAX_DEPOSIT_SIZE = type(uint96).max;
 
@@ -29,6 +31,8 @@ contract Handler is Test {
         address[] memory collateralTokens = dsce.getCollateralTokens();
         weth = ERC20Mock(collateralTokens[0]);
         wbtc = ERC20Mock(collateralTokens[1]);
+
+        wethUsdPriceFeed = MockV3Aggregator(dsce.getCollateralTokenPriceFeed(address(weth)));
     }
 
     // redeem collateral
@@ -71,6 +75,12 @@ contract Handler is Test {
         amountCollateral = bound(amountCollateral, 0, maxCollateralToRedeem);
         if (amountCollateral == 0) return;
         dsce.redeemCollateral(address(collateral), amountCollateral);
+    }
+
+    // this will break the invariant test suite cause
+    function updateCollateralPrice(uint96 newPrice) public {
+        int256 newPriceInt = int256(uint256(newPrice));
+        wethUsdPriceFeed.updateAnswer(newPriceInt);
     }
 
     // Helper Functions
